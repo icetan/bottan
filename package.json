@@ -1,0 +1,15 @@
+{
+  "name": "bottan"
+  ,"version": "0.0.1"
+  ,"description": "micro IRC bot"
+  ,"author": "Christopher Fredén <c.freden@gmail.com>"
+  ,"dependencies": {
+    "coffee-script": "1.1.x"
+    ,"nirc": "0.1.x"
+    ,"watch": "0.3.x"
+  }
+  ,"scripts": {
+  	"start": "coffee bottan.coffee"
+  }
+  ,"files": ["server.js", "plugins/", "LICENSE", "README.md"]
+}

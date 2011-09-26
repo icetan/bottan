@@ -1,6 +1,9 @@
 {
-  "serverHost": "irc.freenode.net"
-  ,"serverPort": 6667
+  "server": "irc.freenode.net"
+  ,"port": 6667
   ,"nick": "bottan"
   ,"name": "Bot Tan"
+  ,"channel": "#bottan"
+  ,"password": ""
+  ,"plugins": "./plugins"
 }

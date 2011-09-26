@@ -68,22 +68,33 @@ class Bottan
     to ?= @channel
     to = if to is @client.nick then @nick else to
     @client.raw "PRIVMSG #{to} :#{txt}"
+
+  _tome: (txt) ->
+    (new RegExp("^\\s*#{@client.nick}[:, ]\\s*(.+)$").exec(txt))?[1]
     
   emit: (msg) ->
     cmd = msg.command.toLowerCase()
     msg.client = @client
+    msg.config = @conf
     if cmd in ['privmsg', 'join', 'part', 'topic', 'mode']
       msg.channel = msg.params[0]
       msg.send = @_send
+    @callPlugins cmd, msg
+    if cmd is 'privmsg'
+      if msg.channel isnt @client.nick
+        msg.trailing = @_tome msg.trailing
+      if msg.trailing? then @callPlugins 'tome', msg
+
+  callPlugins: (cmd, data) ->
     for name, plugin of @plugins
       if cmd of plugin
         console.log "plugin #{name} is registered on command #{cmd}"
         try
           if plugin[cmd] instanceof Function
-            plugin[cmd].call msg
-          else if msg.trailing?
-            match msg.trailing, plugin[cmd], (fn, args) ->
-              fn.apply msg, args
+            plugin[cmd].call data
+          else if data.trailing?
+            match data.trailing, plugin[cmd], (fn, args) ->
+              fn.apply data, args
         catch err
           console.log "Plugin '#{name}' produced an error:"
           console.log err

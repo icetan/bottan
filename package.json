@@ -5,8 +5,8 @@
   ,"author": "Christopher Fredén <c.freden@gmail.com>"
   ,"dependencies": {
     "coffee-script": "1.1.x"
-    ,"nirc": "0.1.x"
     ,"watch": "0.3.x"
+    ,"nirc": "https://github.com/icetan/nirc/tarball/patch-1"
   }
   ,"scripts": {
   	"start": "coffee bottan.coffee"

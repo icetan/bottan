@@ -12,7 +12,8 @@ pluginFilter = (file) ->
 class Bottan
   constructor: (@conf) ->
     @plugins = {}
-    @client = new Client @conf.server, @conf.port, @conf.nick, @conf.name
+    @client = new Client @conf.server, @conf.port, @conf.nick, @conf.name,
+      @conf.serverPass
     @client.on 'parsed', (msg) =>
       console.log msg
       @emit msg

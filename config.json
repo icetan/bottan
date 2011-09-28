@@ -1,10 +1,10 @@
 {
-  "server": "localhost"
+  "server": "irc.freenode.net"
   ,"serverPass": ""
-  ,"port": 6668
+  ,"port": 6667
   ,"nick": "bottan"
   ,"name": "Bot Tan"
-  ,"channel": "#kartena"
+  ,"channel": "#bottan"
   ,"password": ""
   ,"plugins": "./plugins"
 }

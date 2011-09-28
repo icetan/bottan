@@ -1,7 +1,6 @@
 http = require 'http'
 
 module.exports =
-  name: 'twitter'
   privmsg:
     'twitter.com/(#!/)?([^/]+)/status/([^/]+)': (_, user, id) ->
       http.get {

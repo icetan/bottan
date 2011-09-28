@@ -1,6 +1,7 @@
 fs = require 'fs'
-resolve = require('path').resolve
+path = require 'path'
 watch = require 'watch'
+cron = require 'cron'
 Client = require('nirc').Client
 match = require('./lib/dispatch').match
 
@@ -19,10 +20,12 @@ class Bottan
       @emit msg
     @client.connect =>
       @loadPlugins @conf.plugins
-      @watchPlugins @conf.plugins
+      @_watchPlugins @conf.plugins
       @chan = @client.join @conf.channel, @conf.password
+#    @on '433', =>
+#       do better nick change handling
 
-  watchPlugins: (dir) ->
+  _watchPlugins: (dir) ->
     watch.createMonitor dir, {
       filter: (file) -> not pluginFilter file
     }, (monitor) =>
@@ -39,31 +42,61 @@ class Bottan
           @loadPlugin "#{dir}/#{file}"
 
   loadPlugin: (file) ->
-    file = resolve file
+    file = path.resolve file
     console.log "loading plugin #{file}"
     try
       plugin = require file
       if plugin instanceof Function
-        plugin = plugin.call
-          client: @client
-          config: @conf
-      @plugins[plugin.name] = plugin
+        plugin = @_call plugin
+      plugin.jobs = []
+      for time, fn of plugin.cron
+        plugin.jobs.push cron.job time, => @_call fn
+      @plugins[path.basename file] = plugin
     catch err
+      console.log "plugin #{file} caused an error on load:"
       console.log err
     console.log "registered plugins:"
     console.log @plugins
 
   unloadPlugin: (file) ->
-    file = resolve file
+    file = path.resolve file
+    name = path.basename file
     console.log "unloading plugin #{file}"
-    delete @plugins[require(file).name]
-    delete require.cache[file]
+    if name of @plugins
+      plugin = @plugins[name]
+      delete @plugins[name]
+      delete require.cache[file]
+      try
+        for job in plugin.jobs
+          job.stop()
+        if plugin.unload instanceof Function
+          @_call plugin.unload
+      catch err
+        console.log "plugin #{file} caused an error on unload:"
+        console.log err
   
   reloadPlugin: (file) ->
-    file = resolve file
+    file = path.resolve file
     console.log "reloading plugin #{file}"
-    delete require.cache[file]
+    @unloadPlugin file
     @loadPlugin file
+  
+# support for named/grouped cron jobs, a bit complex so commenting for now
+#
+#  _setCronJobs: (plugin) ->
+#    plugin.jobs = {}
+#    for name, crons of plugin.cron
+#      plugin.jobs[name] = group = []
+#      group.stop = ->
+#        for job in @
+#          job.stop()
+#      for time, fn of crons
+#        group.push cron.job(time, => @_call fn)
+
+  _call: (fn) ->
+    fn.call
+      client: @client
+      config: @conf
 
   _send: (txt, to) ->
     to ?= @channel
@@ -80,13 +113,13 @@ class Bottan
     if cmd in ['privmsg', 'join', 'part', 'topic', 'mode']
       msg.channel = msg.params[0]
       msg.send = @_send
-    @callPlugins cmd, msg
+    @_callPlugins cmd, msg
     if cmd is 'privmsg'
       if msg.channel isnt @client.nick
         msg.trailing = @_tome msg.trailing
-      if msg.trailing? then @callPlugins 'tome', msg
+      if msg.trailing? then @_callPlugins 'tome', msg
 
-  callPlugins: (cmd, data) ->
+  _callPlugins: (cmd, data) ->
     for name, plugin of @plugins
       if cmd of plugin
         console.log "plugin #{name} is registered on command #{cmd}"

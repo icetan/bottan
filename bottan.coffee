@@ -5,8 +5,6 @@ cron = require 'cron'
 Client = require('nirc').Client
 match = require('./lib/dispatch').match
 
-conf = JSON.parse(fs.readFileSync 'config.json')
-
 pluginFilter = (file) ->
   file[0] isnt '.' and (file[-3..] is '.js' or file[-7..] is '.coffee')
 
@@ -16,12 +14,12 @@ class Bottan
     @client = new Client @conf.server, @conf.port, @conf.nick, @conf.name,
       @conf.serverPass
     @client.on 'parsed', (msg) =>
-      console.log msg
+      if @conf.verbose then console.log msg
       @emit msg
     @client.connect =>
       @loadPlugins @conf.plugins
       @_watchPlugins @conf.plugins
-      @chan = @client.join @conf.channel, @conf.password
+      @client.join @conf.channel, @conf.password
 #    @on '433', =>
 #       do better nick change handling
 
@@ -47,10 +45,13 @@ class Bottan
     try
       plugin = require file
       if plugin instanceof Function
-        plugin = @_call plugin
+        plugin = plugin.call
+          conf: @conf
+          client: @client
+      plugin.bot = @
       plugin.jobs = []
       for time, fn of plugin.cron
-        plugin.jobs.push cron.job time, => @_call fn
+        plugin.jobs.push cron.job time, -> fn.call plugin
       @plugins[path.basename file] = plugin
     catch err
       console.log "plugin #{file} caused an error on load:"
@@ -70,7 +71,7 @@ class Bottan
         for job in plugin.jobs
           job.stop()
         if plugin.unload instanceof Function
-          @_call plugin.unload
+          plugin.unload()
       catch err
         console.log "plugin #{file} caused an error on unload:"
         console.log err
@@ -93,26 +94,17 @@ class Bottan
 #      for time, fn of crons
 #        group.push cron.job(time, => @_call fn)
 
-  _call: (fn) ->
-    fn.call
-      client: @client
-      config: @conf
-
-  _send: (txt, to) ->
-    to ?= @channel
-    to = if to is @client.nick then @nick else to
-    @client.raw "PRIVMSG #{to} :#{txt}"
-
   _tome: (txt) ->
     (new RegExp("^\\s*#{@client.nick}[:, ]\\s*(.+)$").exec(txt))?[1]
     
   emit: (msg) ->
     cmd = msg.command.toLowerCase()
-    msg.client = @client
-    msg.config = @conf
     if cmd in ['privmsg', 'join', 'part', 'topic', 'mode']
       msg.channel = msg.params[0]
-      msg.send = @_send
+      msg.send = (txt) =>
+        to ?= msg.channel
+        to = if to is @client.nick then msg.nick else to
+        @client.raw "PRIVMSG #{to} :#{txt}"
     @_callPlugins cmd, msg
     if cmd is 'privmsg'
       if msg.channel isnt @client.nick
@@ -124,15 +116,21 @@ class Bottan
       if cmd of plugin
         console.log "plugin #{name} is registered on command #{cmd}"
         try
+          args = []
           if plugin[cmd] instanceof Function
-            plugin[cmd].call data
-          else if data.trailing?
-            match data.trailing, plugin[cmd], (fn, args) ->
-              fn.apply data, args
+            handlers = plugin[cmd] data
+          else
+            handlers = plugin[cmd]
+            args.push data
+          # match regexp handlers
+          if data.trailing? and handlers?
+            match data.trailing, handlers, (fn, matches) ->
+              fn.apply plugin, args.concat matches
         catch err
           console.log "Plugin '#{name}' produced an error:"
           console.log err
 
+conf = JSON.parse fs.readFileSync(process.argv[2] ? 'config.json')
 bottan = new Bottan conf
 
 process.on "SIGINT", ->

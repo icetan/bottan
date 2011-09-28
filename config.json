@@ -7,4 +7,5 @@
   ,"channel": "#bottan"
   ,"password": ""
   ,"plugins": "./plugins"
+  ,"verbose": false
 }

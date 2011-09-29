@@ -7,7 +7,7 @@
     "coffee-script": "1.1.x"
     ,"watch": "0.3.x"
     ,"cron": "https://github.com/ncb000gt/node-cron/tarball/master"
-    ,"nirc": "https://github.com/icetan/nirc/tarball/patch-1"
+    ,"nirc": ">=0.1.1"
   }
   ,"scripts": {
   	"start": "coffee bottan.coffee"

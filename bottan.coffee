@@ -51,7 +51,8 @@ class Bottan
       plugin.bot = @
       plugin.jobs = []
       for time, fn of plugin.cron
-        plugin.jobs.push cron.job time, -> fn.call plugin
+        do (time, fn) ->
+          plugin.jobs.push cron.job time, -> fn.call plugin
       @plugins[path.basename file] = plugin
     catch err
       console.log "plugin #{file} caused an error on load:"
@@ -113,22 +114,25 @@ class Bottan
 
   _callPlugins: (cmd, data) ->
     for name, plugin of @plugins
-      if cmd of plugin
-        console.log "plugin #{name} is registered on command #{cmd}"
-        try
-          args = []
-          if plugin[cmd] instanceof Function
-            handlers = plugin[cmd] data
-          else
-            handlers = plugin[cmd]
-            args.push data
-          # match regexp handlers
-          if data.trailing? and handlers?
-            match data.trailing, handlers, (fn, matches) ->
-              fn.apply plugin, args.concat matches
-        catch err
-          console.log "Plugin '#{name}' produced an error:"
-          console.log err
+      do (name, plugin) ->
+        if cmd of plugin
+          console.log "plugin #{name} is registered on command #{cmd}"
+          try
+            args = []
+            if plugin[cmd] instanceof Function
+              handlers = plugin[cmd] data
+            else
+              handlers = plugin[cmd]
+              args.push data
+            # match regexp handlers
+            if data.trailing? and handlers?
+              stop = false
+              match data.trailing, handlers, (fn, matches) ->
+                if not stop and (fn.apply plugin, args.concat matches) is false
+                  stop = true
+          catch err
+            console.log "Plugin '#{name}' produced an error:"
+            console.log err
 
 conf = JSON.parse fs.readFileSync(process.argv[2] ? 'config.json')
 bottan = new Bottan conf

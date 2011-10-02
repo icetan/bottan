@@ -8,14 +8,18 @@ match = require('./lib/dispatch').match
 pluginFilter = (file) ->
   file[0] isnt '.' and (file[-3..] is '.js' or file[-7..] is '.coffee')
 
+iter = (q, fn, d) -> if (i=q.shift())? then fn i, (-> iter q, fn, d) else d?()
+concat = (a, exp...) -> (for k,v of b then a[k] = v) for b in exp; a
+
 class Bottan
   constructor: (@conf) ->
+    @_sendQueue = []
     @plugins = {}
     @client = new Client @conf.server, @conf.port, @conf.nick, @conf.name,
       @conf.serverPass
-    @client.on 'parsed', (msg) =>
-      if @conf.verbose then console.log msg
-      @emit msg
+    @client.on 'parsed', (data) =>
+      if @conf.verbose then console.log data
+      @_callPlugins data
     @client.connect =>
       @loadPlugins @conf.plugins
       @_watchPlugins @conf.plugins
@@ -45,10 +49,7 @@ class Bottan
     try
       plugin = require file
       if plugin instanceof Function
-        plugin = plugin.call
-          conf: @conf
-          client: @client
-      plugin.bot = @
+        plugin = plugin @
       plugin.jobs = []
       for time, fn of plugin.cron
         do (time, fn) ->
@@ -98,38 +99,46 @@ class Bottan
   _tome: (txt) ->
     (new RegExp("^\\s*#{@client.nick}[:, ]\\s*(.+)$").exec(txt))?[1]
     
-  emit: (msg) ->
+  throttle: (len) -> len * 100
+
+  _message: (plugin, data) ->
+    msg = concat {}, data
     cmd = msg.command.toLowerCase()
     if cmd in ['privmsg', 'join', 'part', 'topic', 'mode']
       msg.channel = msg.params[0]
-      msg.send = (txt) =>
-        to ?= msg.channel
-        to = if to is @client.nick then msg.nick else to
-        @client.raw "PRIVMSG #{to} :#{txt}"
-    @_callPlugins cmd, msg
-    if cmd is 'privmsg'
-      if msg.channel isnt @client.nick
-        msg.trailing = @_tome msg.trailing
-      if msg.trailing? then @_callPlugins 'tome', msg
+      msg.send = (txt, to) =>
+        @_sendQueue.push =>
+          console.log "send: #{txt}"
+          to ?= msg.channel
+          to = if to is @client.nick then msg.nick or to else to
+          @client.raw "PRIVMSG #{to} :#{txt}"
+        if @_sendQueue.length is 1
+          iter @_sendQueue, (i, next) =>
+            i()
+            setTimeout next, @throttle(@_sendQueue.length)
+    if msg.trailing?
+      msg.match = (re, fn) ->
+        if (m = msg.trailing.match re)?
+          console.log m
+          fn.apply plugin, m
+          true
+        else
+          false
+    msg
 
-  _callPlugins: (cmd, data) ->
+  _callPlugins: (data) ->
+    cmd = data.command.toLowerCase()
     for name, plugin of @plugins
-      do (name, plugin) ->
+      do (name, plugin) =>
         if cmd of plugin
           console.log "plugin #{name} is registered on command #{cmd}"
+          msg = @_message plugin, data
           try
-            args = []
-            if plugin[cmd] instanceof Function
-              handlers = plugin[cmd] data
-            else
-              handlers = plugin[cmd]
-              args.push data
-            # match regexp handlers
-            if data.trailing? and handlers?
-              stop = false
-              match data.trailing, handlers, (fn, matches) ->
-                if not stop and (fn.apply plugin, args.concat matches) is false
-                  stop = true
+            plugin[cmd]?(msg)
+            if cmd is 'privmsg'
+              if msg.channel isnt @client.nick
+                msg.trailing = @_tome msg.trailing
+              if msg.trailing? then plugin.tome?(msg)
           catch err
             console.log "Plugin '#{name}' produced an error:"
             console.log err

@@ -17,7 +17,7 @@ twitter = (path, fn) ->
 
 module.exports =
   privmsg: (m) ->
-    'twitter.com/(#!/)?([^/]+)/status/([^/]+)': (_, user, id) ->
+    m.match /twitter.com\/(?:#!\/)?([^/]+)\/status\/([^/]+)/, (url, user, id) ->
       http.get {
         host: 'api.twitter.com'
         path: "/1/statuses/show.json?id=#{id}"

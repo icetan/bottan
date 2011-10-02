@@ -117,13 +117,14 @@ class Bottan
             i()
             setTimeout next, @throttle(@_sendQueue.length)
     if msg.trailing?
-      msg.match = (re, fn) ->
-        if (m = msg.trailing.match re)?
-          console.log m
-          fn.apply plugin, m
-          true
-        else
-          false
+      msg.match = (pairs...) ->
+        while pairs.length > 1
+          [re, fn] = pairs.splice 0, 2
+          if (m = msg.trailing.match re)?
+            console.log m
+            fn.apply plugin, m
+            return true
+        false
     msg
 
   _callPlugins: (data) ->

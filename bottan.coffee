@@ -108,14 +108,15 @@ class Bottan
       msg.channel = msg.params[0]
       msg.send = (txt, to) =>
         @_sendQueue.push =>
-          console.log "send: #{txt}"
           to ?= msg.channel
           to = if to is @client.nick then msg.nick or to else to
           @client.raw "PRIVMSG #{to} :#{txt}"
         if @_sendQueue.length is 1
-          iter @_sendQueue, (i, next) =>
-            i()
-            setTimeout next, @throttle(@_sendQueue.length)
+          setTimeout =>
+            iter @_sendQueue, (i, next) =>
+              i()
+              setTimeout next, @throttle @_sendQueue.length
+          ,@throttle @_sendQueue.length
     if msg.trailing?
       msg.match = (pairs...) ->
         while pairs.length > 1

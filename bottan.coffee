@@ -132,18 +132,21 @@ class Bottan
     cmd = data.command.toLowerCase()
     for name, plugin of @plugins
       do (name, plugin) =>
-        if cmd of plugin
-          console.log "plugin #{name} is registered on command #{cmd}"
-          msg = @_message plugin, data
-          try
-            plugin[cmd]?(msg)
-            if cmd is 'privmsg'
-              if msg.channel isnt @client.nick
-                msg.trailing = @_tome msg.trailing
-              if msg.trailing? then plugin.tome?(msg)
-          catch err
-            console.log "Plugin '#{name}' produced an error:"
-            console.log err
+        msg = @_message plugin, data
+        @_execPluginCmd name, cmd, msg
+        if cmd is 'privmsg'
+          if msg.channel isnt @client.nick
+            msg.trailing = @_tome msg.trailing
+          if msg.trailing? then @_execPluginCmd name, 'tome', msg
+
+  _execPluginCmd: (name, cmd, msg) ->
+    plugin = @plugins[name]
+    if cmd of plugin
+      try
+        plugin[cmd]?(msg)
+      catch err
+        console.log "Plugin '#{name}' produced an error:"
+        console.log err
 
 conf = JSON.parse fs.readFileSync(process.argv[2] ? 'config.json')
 bottan = new Bottan conf

@@ -1,12 +1,18 @@
 fs = require 'fs'
 path = require 'path'
+util = require 'util'
 watch = require 'watch'
 cron = require 'cron'
 Client = require('nirc').Client
 match = require('./lib/dispatch').match
 
-pluginFilter = (file) ->
-  file[0] isnt '.' and (file[-3..] is '.js' or file[-7..] is '.coffee')
+pluginFilter = (file, dir) ->
+  file = path.resolve file
+  base = path.basename file
+  inc = path.dirname(file) is path.resolve(dir) and base[0] isnt '.' and
+    (base[-3..] is '.js' or base[-7..] is '.coffee')
+  console.log "watch filter: #{file}: #{inc}"
+  inc
 
 iter = (q, fn, d) -> if (i=q.shift())? then fn i, (-> iter q, fn, d) else d?()
 concat = (a, exp...) -> (for k,v of b then a[k] = v) for b in exp; a
@@ -29,7 +35,7 @@ class Bottan
 
   _watchPlugins: (dir) ->
     watch.createMonitor dir, {
-      filter: (file) -> not pluginFilter file
+      filter: (file) -> not pluginFilter(file, dir)
     }, (monitor) =>
       monitor.on 'created', (file, stat) => @loadPlugin file
       monitor.on 'removed', (file, stat) => @unloadPlugin file
@@ -40,12 +46,12 @@ class Bottan
   loadPlugins: (dir) ->
     fs.readdir dir, (err, files) =>
       for file in files
-        if pluginFilter file
+        if pluginFilter file, dir
           @loadPlugin "#{dir}/#{file}"
 
   loadPlugin: (file) ->
     file = path.resolve file
-    console.log "loading plugin #{file}"
+    util.log "loading plugin #{file}"
     try
       plugin = require file
       if plugin instanceof Function
@@ -56,7 +62,7 @@ class Bottan
           plugin.jobs.push cron.job time, -> fn.call plugin
       @plugins[path.basename file] = plugin
     catch err
-      console.log "plugin #{file} caused an error on load:"
+      util.log "plugin #{file} caused an error on load:"
       console.log err
     console.log "registered plugins:"
     console.log @plugins
@@ -64,7 +70,7 @@ class Bottan
   unloadPlugin: (file) ->
     file = path.resolve file
     name = path.basename file
-    console.log "unloading plugin #{file}"
+    util.log "unloading plugin #{file}"
     if name of @plugins
       plugin = @plugins[name]
       delete @plugins[name]
@@ -75,7 +81,7 @@ class Bottan
         if plugin.unload instanceof Function
           plugin.unload()
       catch err
-        console.log "plugin #{file} caused an error on unload:"
+        util.log "plugin #{file} caused an error on unload:"
         console.log err
   
   reloadPlugin: (file) ->
@@ -122,7 +128,6 @@ class Bottan
         while pairs.length > 1
           [re, fn] = pairs.splice 0, 2
           if (m = msg.trailing.match re)?
-            console.log m
             fn.apply plugin, m
             return true
         false
@@ -145,7 +150,7 @@ class Bottan
       try
         plugin[cmd]?(msg)
       catch err
-        console.log "Plugin '#{name}' produced an error:"
+        util.log "Plugin '#{name}' produced an error:"
         console.log err
 
 conf = JSON.parse fs.readFileSync(process.argv[2] ? 'config.json')

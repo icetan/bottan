@@ -4,7 +4,6 @@ util = require 'util'
 watch = require 'watch'
 cron = require 'cron'
 Client = require('nirc').Client
-match = require('./lib/dispatch').match
 
 pluginFilter = (file, dir) ->
   file = path.resolve file
@@ -46,8 +45,9 @@ class Bottan
   loadPlugins: (dir) ->
     fs.readdir dir, (err, files) =>
       for file in files
+        file = "#{dir}/#{file}"
         if pluginFilter file, dir
-          @loadPlugin "#{dir}/#{file}"
+          @loadPlugin file
 
   loadPlugin: (file) ->
     file = path.resolve file
@@ -161,3 +161,7 @@ process.on "SIGINT", ->
     bottan.client.quit "Väl mött"
   process.exit 0
 
+process.on 'uncaughtException', (err) ->
+  console.log err
+  for name, chan of bottan.client.channels
+    chan.send 'I puked a little, check my logs.'

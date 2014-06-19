@@ -1,7 +1,7 @@
 fs = require 'fs'
 path = require 'path'
 util = require 'util'
-watch = require 'watch'
+watchr = require 'watchr'
 cron = require 'cron'
 Client = require('nirc').Client
 
@@ -10,7 +10,7 @@ pluginFilter = (file, dir) ->
   base = path.basename file
   inc = path.dirname(file) is path.resolve(dir) and base[0] isnt '.' and
     (base[-3..] is '.js' or base[-7..] is '.coffee')
-  console.log "watch filter: #{file}: #{inc}"
+  console.log "Plugin filter: #{file}: #{inc}"
   inc
 
 iter = (q, fn, d) -> if (i=q.shift())? then fn i, (-> iter q, fn, d) else d?()
@@ -27,20 +27,32 @@ class Bottan
       @_callPlugins data
     @client.connect =>
       @loadPlugins @conf.plugins
-      @_watchPlugins @conf.plugins
+      #@_watchPlugins @conf.plugins
       @client.join @conf.channel, @conf.password
 #    @on '433', =>
 #       do better nick change handling
 
   _watchPlugins: (dir) ->
-    watch.createMonitor dir, {
-      filter: (file) -> not pluginFilter(file, dir)
-    }, (monitor) =>
-      monitor.on 'created', (file, stat) => @loadPlugin file
-      monitor.on 'removed', (file, stat) => @unloadPlugin file
-      monitor.on 'changed', (file, curr, prev) =>
-        if curr.mtime.getTime() isnt prev.mtime.getTime()
-          @reloadPlugin file
+    #watch.createMonitor dir, {
+    #  filter: (file) -> not pluginFilter(file, dir)
+    #}, (monitor) =>
+    #  monitor.on 'created', (file, stat) => @loadPlugin file
+    #  monitor.on 'removed', (file, stat) => @unloadPlugin file
+    #  monitor.on 'changed', (file, curr, prev) =>
+    #    if curr.mtime.getTime() isnt prev.mtime.getTime()
+    #      @reloadPlugin file
+    console.log "WATCHR: watching #{dir} for script changes"
+    watchr.watch dir, (args...) => #event, file, curr, prev) =>
+      console.log "WATCHR: ", args
+      #console.log "WATCHR: #{file} triggerd event: #{event}"
+      #(return) if not pluginFilter file, dir
+      #if event is 'new'
+      #  @loadPlugin file
+      #else if event is 'unlink'
+      #  @unloadPlugin file
+      #else if event is 'change'
+      #  if curr.mtime.getTime() isnt prev.mtime.getTime()
+      #    @reloadPlugin file
 
   loadPlugins: (dir) ->
     fs.readdir dir, (err, files) =>
@@ -83,13 +95,13 @@ class Bottan
       catch err
         util.log "plugin #{file} caused an error on unload:"
         console.log err
-  
+
   reloadPlugin: (file) ->
     file = path.resolve file
     console.log "reloading plugin #{file}"
     @unloadPlugin file
     @loadPlugin file
-  
+
 # support for named/grouped cron jobs, a bit complex so commenting for now
 #
 #  _setCronJobs: (plugin) ->
@@ -104,7 +116,7 @@ class Bottan
 
   _tome: (txt) ->
     (new RegExp("^\\s*#{@client.nick}[:, ]\\s*(.+)$").exec(txt))?[1]
-    
+
   throttle: (len) -> len * 100
 
   _message: (plugin, data) ->
